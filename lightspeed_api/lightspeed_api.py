@@ -6,7 +6,8 @@ import time
 from urllib import parse
 
 __author__ = "Forrest Beck"
-
+REQUESTS_PER_SECOND = 1
+RETRY_STATUS_CODES = [429, 104]
 
 class Lightspeed(object):
 
@@ -118,7 +119,7 @@ class Lightspeed(object):
 
         try:
             tries = 0
-            while tries <= 3:
+            while tries <= 5:
                 if method is "post":
                     s = self.session.post(url, data=data)
                 elif method is "put":
@@ -128,8 +129,8 @@ class Lightspeed(object):
                 elif method is "get":
                     s = self.session.get(url)
                 # Watch for too many requests status
-                if s.status_code == 429:
-                    time.sleep(1)
+                if s.status_code in RETRY_STATUS_CODES:
+                    time.sleep(REQUESTS_PER_SECOND)
                     tries += 1
                 else:
                     break

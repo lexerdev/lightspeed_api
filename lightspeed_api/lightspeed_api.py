@@ -140,7 +140,7 @@ class Lightspeed(object):
                 # Update Bucket Levels
                 self.rate_limit_bucket_level = s.headers['X-LS-API-Bucket-Level']
                 # Update Drip Rates
-                self.rate_limit_bucket_rate = int(s.headers['X-LS-API-Drip-Rate'])
+                self.rate_limit_bucket_rate = int(float(s.headers['X-LS-API-Drip-Rate']))
 
                 return s.json()
             else:

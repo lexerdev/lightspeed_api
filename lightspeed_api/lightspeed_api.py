@@ -174,12 +174,7 @@ class Lightspeed(object):
             while page <= page_count:
                 if page > 1:
                     offset += 100
-                    p = self.request_bucket("get", url + "&offset=" + str(offset))
-
-                    # Append new data to original request
-                    for i in p:
-                        if type(p[i]) == list:
-                            r[i].extend(p[i])
+                    yield self.request_bucket("get", url + "&offset=" + str(offset))
 
                 page += 1
         return r

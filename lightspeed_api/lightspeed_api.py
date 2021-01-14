@@ -166,6 +166,7 @@ class Lightspeed(object):
             url = self.api_url + source + ".json"
 
         r = self.request_bucket("get", url)
+        yield r
 
         if int(r['@attributes']['count']) >= 100:
             page_count = math.ceil(int(r['@attributes']['count']) / 100)
@@ -177,7 +178,6 @@ class Lightspeed(object):
                     yield self.request_bucket("get", url + "&offset=" + str(offset))
 
                 page += 1
-        return r
 
     def create(self, source, data, parameters=None):
         """

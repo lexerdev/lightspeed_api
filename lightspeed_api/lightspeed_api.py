@@ -9,6 +9,9 @@ __author__ = "Forrest Beck"
 REQUESTS_PER_SECOND = 1
 RETRY_STATUS_CODES = [429, 104]
 
+class LightSpeedJSONParseError(Exception):
+    pass
+
 class Lightspeed(object):
 
     def __init__(self, config):
@@ -143,7 +146,7 @@ class Lightspeed(object):
                 # Update Drip Rates
                 self.rate_limit_bucket_rate = int(float(s.headers['X-LS-API-Drip-Rate']))
 
-                return s.json()
+                return s
             else:
                 return None
 
@@ -167,10 +170,14 @@ class Lightspeed(object):
             url = self.api_url + source + ".json"
 
         r = self.request_bucket("get", url)
+        try:
+            query_count = int(r.json()['@attributes']['count'])
+        except KeyError:
+            raise LightSpeedJSONParseError('There was an issue retreiving the queries record count')
         yield r
 
-        if int(r['@attributes']['count']) >= 100:
-            page_count = math.ceil(int(r['@attributes']['count']) / 100)
+        if query_count >= 100:
+            page_count = math.ceil(query_count / 100)
             page = 1
             offset = 0
             while page <= page_count:

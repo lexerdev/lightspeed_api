@@ -172,6 +172,7 @@ class Lightspeed(object):
         r = self.request_bucket("get", url)
         try:
             query_count = int(r.json()['@attributes']['count'])
+            print(r.content)
         except KeyError:
             raise LightSpeedJSONParseError('There was an issue retreiving the queries record count')
         yield r

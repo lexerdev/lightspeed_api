@@ -100,7 +100,7 @@ class Lightspeed(object):
         :param method: post, get, put, delete
         :param url: complete api url
         :param data: post/put data
-        :return: results in json
+        :return: request object
         """
 
         if self.rate_limit_bucket_level is not None:
@@ -135,6 +135,10 @@ class Lightspeed(object):
                 if s.status_code in RETRY_STATUS_CODES:
                     time.sleep(REQUESTS_PER_SECOND)
                     tries += 1
+                # Re-Auth Token
+                elif s.status_code == 401:
+                    self.get_token()
+                    tries += 1
                 else:
                     break
 
@@ -146,8 +150,6 @@ class Lightspeed(object):
                 # Update Drip Rates
                 self.rate_limit_bucket_rate = int(float(s.headers['X-LS-API-Drip-Rate']))
 
-                return s
-            else:
                 return s
 
         except requests.exceptions.HTTPError as e:

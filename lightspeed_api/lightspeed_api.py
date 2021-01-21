@@ -11,6 +11,8 @@ RETRY_STATUS_CODES = [429, 104]
 
 class LightSpeedJSONParseError(Exception):
     pass
+class LightSpeedResponseError(Exception):
+    pass
 
 class Lightspeed(object):
 
@@ -151,6 +153,8 @@ class Lightspeed(object):
                 self.rate_limit_bucket_rate = int(float(s.headers['X-LS-API-Drip-Rate']))
 
                 return s
+            else:
+                raise LightSpeedResponseError(f'There was an issue making the request \n CODE: {s.status_code}, MESSAGE: {s.json()} ')
 
         except requests.exceptions.HTTPError as e:
             return "Error: " + str(e)

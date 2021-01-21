@@ -154,7 +154,7 @@ class Lightspeed(object):
 
                 return s
             else:
-                return None
+                raise LightSpeedResponseError(f'Received a non 200 status code: {s.status_code}, message: {s.json()}')
 
         except requests.exceptions.HTTPError as e:
             return "Error: " + str(e)

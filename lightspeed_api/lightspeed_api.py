@@ -98,9 +98,10 @@ class Lightspeed(object):
 
     def request_bucket(self, method, url, data=None):
         x = {
-            'refresh_token': len("refresh_token"),
-            'client_secret': len("client_secret"),
-            'client_id':     len("client_id")
+            'account_id': len(self.config["account_id"]),
+            'refresh_token': len(self.config["refresh_token"]),
+            'client_secret': len(self.config["client_secret"]),
+            'client_id':     len(self.config["client_id"])
             }
         """
         Sends request to session.  Ensures the request doesn't exceed the rate limits of the leaky bucket.

@@ -97,12 +97,6 @@ class Lightspeed(object):
             return self.bearer_token
 
     def request_bucket(self, method, url, data=None):
-        x = {
-            'account_id': len(self.config["account_id"]),
-            'refresh_token': len(self.config["refresh_token"]),
-            'client_secret': len(self.config["client_secret"]),
-            'client_id':     len(self.config["client_id"])
-            }
         """
         Sends request to session.  Ensures the request doesn't exceed the rate limits of the leaky bucket.
         :param method: post, get, put, delete
@@ -160,7 +154,7 @@ class Lightspeed(object):
 
                 return s
             else:
-                raise LightSpeedResponseError(f'Received a non 200 status code: {s.status_code}, message: {s.json()} \n cred_lengths: {x}')
+                raise LightSpeedResponseError(f'Received a non 200 status code: {s.status_code}, message: {s.json()}')
 
         except requests.exceptions.HTTPError as e:
             return "Error: " + str(e)

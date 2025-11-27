@@ -1,6 +1,5 @@
 import requests
 import datetime
-import math
 import json
 import time
 from urllib import parse
@@ -25,7 +24,7 @@ class Lightspeed(object):
 
         self.token_url = "https://cloud.lightspeedapp.com/oauth/access_token.php"
         if "account_id" in config:
-            self.api_url = "https://api.lightspeedapp.com/API/Account/" + config["account_id"] + "/"
+            self.api_url = "https://api.lightspeedapp.com/API/V3/Account/" + config["account_id"] + "/"
         else:
             self.api_url = ""
         # Initialize token as expired.
@@ -125,13 +124,13 @@ class Lightspeed(object):
         try:
             tries = 0
             while tries <= 5:
-                if method is "post":
+                if method == "post":
                     s = self.session.post(url, data=data)
-                elif method is "put":
+                elif method == "put":
                     s = self.session.put(url, data=data)
-                elif method is "delete":
+                elif method == "delete":
                     s = self.session.delete(url)
-                elif method is "get":
+                elif method == "get":
                     s = self.session.get(url)
                 # Watch for too many requests status
                 if s.status_code in RETRY_STATUS_CODES:
@@ -182,16 +181,17 @@ class Lightspeed(object):
             raise LightSpeedJSONParseError(f'There was an issue retreiving the queries record count \n {r.json()}')
         yield r
 
-        if query_count >= 100:
-            page_count = math.ceil(query_count / 100)
-            page = 1
-            offset = 0
-            while page <= page_count:
-                if page > 1:
-                    offset += 100
-                    yield self.request_bucket("get", url + "&offset=" + str(offset))
+        if not r:
+            return
 
-                page += 1
+        if r['@attributes']['next']:
+            next_page = r['@attributes']['next']
+            while True:
+                p = self.request_bucket("get", next_page)
+                yield p
+                next_page = p['@attributes']['next']
+                if not next_page:
+                    break
 
     def create(self, source, data, parameters=None):
         """

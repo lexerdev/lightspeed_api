@@ -156,7 +156,7 @@ class Lightspeed(object):
                 raise LightSpeedResponseError(f'Received a non 200 status code: {s.status_code}, message: {s.json()}')
 
         except requests.exceptions.HTTPError as e:
-            return "Error: " + str(e)
+            raise e
 
     def get(self, source, parameters=None):
         """
@@ -174,21 +174,13 @@ class Lightspeed(object):
         else:
             url = self.api_url + source + ".json"
 
-        r = self.request_bucket("get", url)
-        yield r
-
-        if not r:
-            return
-        body = r.json()
-
-        if body['@attributes']['next']:
-            next_page = body['@attributes']['next']
-            while True:
-                p = self.request_bucket("get", next_page)
-                yield p
-                next_page = p.json()['@attributes']['next']
-                if not next_page:
-                    break
+        while True:
+            r = self.request_bucket("get", url)
+            yield r
+            body = r.json()
+            if not body.get('@attributes', {}).get('next'):
+                break
+            url = body['@attributes']['next']
 
     def create(self, source, data, parameters=None):
         """

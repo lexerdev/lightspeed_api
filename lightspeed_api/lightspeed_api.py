@@ -179,13 +179,14 @@ class Lightspeed(object):
 
         if not r:
             return
+        body = r.json()
 
-        if r['@attributes']['next']:
-            next_page = r['@attributes']['next']
+        if body['@attributes']['next']:
+            next_page = body['@attributes']['next']
             while True:
                 p = self.request_bucket("get", next_page)
                 yield p
-                next_page = p['@attributes']['next']
+                next_page = p.json()['@attributes']['next']
                 if not next_page:
                     break
 

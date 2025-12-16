@@ -145,7 +145,8 @@ class Lightspeed(object):
                     self.rate_limit_bucket_level = s.headers['X-LS-API-Bucket-Level']
                     # Update Drip Rates
                     self.rate_limit_bucket_rate = int(float(s.headers['X-LS-API-Drip-Rate']))
-                    break
+                    return s
+
                 # Watch for too many requests status
                 elif s.status_code in RETRY_STATUS_CODES:
                     time.sleep(REQUESTS_PER_SECOND)

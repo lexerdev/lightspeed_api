@@ -1,3 +1,4 @@
+import sys
 import requests
 import datetime
 import json
@@ -63,7 +64,8 @@ class Lightspeed(object):
             self.session.headers.update({'Authorization': 'Bearer ' + self.bearer_token})
 
             return json["refresh_token"]
-        except:
+        except Exception as e:
+            print(f"Error getting authorization token: {type(e).__name__}: {e}", file=sys.stderr)
             return None
 
     def get_token(self):
@@ -71,29 +73,32 @@ class Lightspeed(object):
         Ensures the Lightspeed HQ Bearer token is current
         :return:
         """
-        if datetime.datetime.now() > self.token_expire_time:
-
-            s = requests.Session()
-
-            try:
-                payload = {
-                    'refresh_token': self.config["refresh_token"],
-                    'client_secret': self.config["client_secret"],
-                    'client_id': self.config["client_id"],
-                    'grant_type': 'refresh_token',
-                }
-                r = s.post(self.token_url, data=payload)
-                json = r.json()
-                self.token_expire_time = datetime.datetime.now() + \
-                                         datetime.timedelta(seconds=int(json["expires_in"]))
-                self.bearer_token = json["access_token"]
-                self.session.headers.update({'Authorization': 'Bearer ' + self.bearer_token})
-
-                return self.bearer_token
-            except:
-                return None
-        else:
+        if datetime.datetime.now() <= self.token_expire_time:
             return self.bearer_token
+
+        s = requests.Session()
+        r = None
+
+        try:
+            payload = {
+                'refresh_token': self.config["refresh_token"],
+                'client_secret': self.config["client_secret"],
+                'client_id': self.config["client_id"],
+                'grant_type': 'refresh_token',
+            }
+            r = s.post(self.token_url, data=payload)
+            json = r.json()
+            self.token_expire_time = datetime.datetime.now() + \
+                                        datetime.timedelta(seconds=int(json["expires_in"]))
+            self.bearer_token = json["access_token"]
+            self.session.headers.update({'Authorization': 'Bearer ' + self.bearer_token})
+
+            return self.bearer_token
+        except Exception as e:
+            print(f"Error getting authorization token: {type(e).__name__}: {e}, {r}", file=sys.stderr)
+            if r is not None:
+                print(f'response: {(r.status_code, r.text,)}', file=sys.stderr)
+            return None
 
     def request_bucket(self, method, url, data=None):
         """
@@ -121,9 +126,9 @@ class Lightspeed(object):
                 if last_request < seconds_wait:
                     time.sleep(seconds_wait - last_request)
 
-        try:
-            tries = 0
-            while tries <= 5:
+        last_response_text, last_status_code = None, None
+        for tries in range(6):
+            try:
                 if method == "post":
                     s = self.session.post(url, data=data)
                 elif method == "put":
@@ -132,31 +137,34 @@ class Lightspeed(object):
                     s = self.session.delete(url)
                 elif method == "get":
                     s = self.session.get(url)
+
+                if s.status_code == 200:
+                    # Update time with latest request.
+                    self.rate_limit_last_request = datetime.datetime.now()
+                    # Update Bucket Levels
+                    self.rate_limit_bucket_level = s.headers['X-LS-API-Bucket-Level']
+                    # Update Drip Rates
+                    self.rate_limit_bucket_rate = int(float(s.headers['X-LS-API-Drip-Rate']))
+                    break
                 # Watch for too many requests status
-                if s.status_code in RETRY_STATUS_CODES:
+                elif s.status_code in RETRY_STATUS_CODES:
                     time.sleep(REQUESTS_PER_SECOND)
-                    tries += 1
                 # Re-Auth Token
                 elif s.status_code == 401:
                     self.get_token()
-                    tries += 1
                 else:
-                    break
-
-            if s.status_code == 200:
-                # Update time with latest request.
-                self.rate_limit_last_request = datetime.datetime.now()
-                # Update Bucket Levels
-                self.rate_limit_bucket_level = s.headers['X-LS-API-Bucket-Level']
-                # Update Drip Rates
-                self.rate_limit_bucket_rate = int(float(s.headers['X-LS-API-Drip-Rate']))
-
-                return s
-            else:
-                raise LightSpeedResponseError(f'Received a non 200 status code: {s.status_code}, message: {s.text}')
-
-        except requests.exceptions.HTTPError as e:
-            raise e
+                    last_response_text, last_status_code = s.text, s.status_code
+                    print(f"Unexpected status code {s.status_code}, message: {s.text}", file=sys.stderr)
+            except requests.exceptions.HTTPError as e:
+                print(f"HTTP error occurred on attempt {tries + 1}: {e}", file=sys.stderr)
+                if tries >= 5:
+                    raise e
+            except Exception as e:
+                print(f"Error occurred on attempt {tries + 1}: {type(e).__name__}: {e}", file=sys.stderr)
+                if tries >= 5:
+                    raise e
+        else:
+            raise LightSpeedResponseError(f'Received a non 200 status code: {last_status_code}, message: {last_response_text}')
 
     def get(self, source, parameters=None):
         """

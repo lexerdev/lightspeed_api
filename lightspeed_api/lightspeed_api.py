@@ -23,7 +23,7 @@ class Lightspeed(object):
         """
         self.config = config
 
-        self.token_url = "https://cloud.lightspeedapp.com/oauth/access_token.php"
+        self.token_url = "https://cloud.lightspeedapp.com/auth/oauth/token"
         if "account_id" in config:
             self.api_url = "https://api.lightspeedapp.com/API/V3/Account/" + config["account_id"] + "/"
         else:
@@ -41,32 +41,6 @@ class Lightspeed(object):
 
     def __repr__(self):
         return "Lightspeed API"
-
-    def get_authorization_token(self, code):
-        """
-        Ensures the Lightspeed HQ Bearer token is current
-        :return:
-        """
-        s = requests.Session()
-
-        try:
-            payload = {
-                'refresh_token': self.config["refresh_token"],
-                'client_secret': self.config["client_secret"],
-                'client_id': self.config["client_id"],
-                'grant_type': 'authorization_code',
-                'code': code
-            }
-            r = s.post(self.token_url, data=payload)
-            json = r.json()
-
-            self.bearer_token = json["access_token"]
-            self.session.headers.update({'Authorization': 'Bearer ' + self.bearer_token})
-
-            return json["refresh_token"]
-        except Exception as e:
-            print(f"Error getting authorization token: {type(e).__name__}: {e}", file=sys.stderr)
-            return None
 
     def get_token(self):
         """
@@ -98,7 +72,10 @@ class Lightspeed(object):
             print(f"Error getting authorization token: {type(e).__name__}: {e}, {r}", file=sys.stderr)
             if r is not None:
                 print(f'response: {(r.status_code, r.text,)}', file=sys.stderr)
-            return None
+            raise LightSpeedResponseError(
+                f"Token refresh failed ({r.status_code if r is not None else 'no response'}): "
+                f"{r.text if r is not None else str(e)}"
+            )
 
     def request_bucket(self, method, url, data=None):
         """

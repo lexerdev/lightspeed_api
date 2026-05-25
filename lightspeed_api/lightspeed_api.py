@@ -28,9 +28,14 @@ class Lightspeed(object):
             self.api_url = "https://api.lightspeedapp.com/API/V3/Account/" + config["account_id"] + "/"
         else:
             self.api_url = ""
-        # Initialize token as expired.
-        self.token_expire_time = datetime.datetime.now() - datetime.timedelta(days=1)
-        self.bearer_token = None
+
+        if "access_token" in config and "access_token_expires_at" in config:
+            self.bearer_token = config["access_token"]
+            self.token_expire_time = datetime.datetime.fromtimestamp(config["access_token_expires_at"])
+        else:
+            self.token_expire_time = datetime.datetime.now() - datetime.timedelta(days=1)
+            self.bearer_token = None
+
         self.rate_limit_bucket_level = None
         self.rate_limit_bucket_rate = 1
         self.rate_limit_last_request = datetime.datetime.now()
@@ -38,6 +43,8 @@ class Lightspeed(object):
         # Create a new session for API calls. This will hold bearer token.
         self.session = requests.Session()
         self.session.headers.update({'Accept': 'application/json'})
+        if self.bearer_token:
+            self.session.headers.update({'Authorization': 'Bearer ' + self.bearer_token})
 
     def __repr__(self):
         return "Lightspeed API"
@@ -62,9 +69,13 @@ class Lightspeed(object):
             }
             r = s.post(self.token_url, data=payload)
             json = r.json()
-            self.token_expire_time = datetime.datetime.now() + \
-                                        datetime.timedelta(seconds=int(json["expires_in"]))
+            expires_in = int(json["expires_in"])
+            self.token_expire_time = datetime.datetime.now() + datetime.timedelta(seconds=expires_in)
             self.bearer_token = json["access_token"]
+            self.config["access_token"] = self.bearer_token
+            self.config["access_token_expires_at"] = self.token_expire_time.timestamp()
+            if "refresh_token" in json:
+                self.config["refresh_token"] = json["refresh_token"]
             self.session.headers.update({'Authorization': 'Bearer ' + self.bearer_token})
 
             return self.bearer_token

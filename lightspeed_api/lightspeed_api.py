@@ -20,19 +20,28 @@ class LightSpeedAuthExpiredError(Exception):
 
 class Lightspeed(object):
 
-    def __init__(self, config):
+    def __init__(self, config, raise_on_auth_expired=True):
         """
         Creates new Lightspeed object.
         :param config: Specify dictionary with config
+        :param raise_on_auth_expired: If True (default), raise LightSpeedAuthExpiredError on 401.
+                                      If False, attempt token refresh via get_token() on 401.
         """
         self.config = config
+        self.raise_on_auth_expired = raise_on_auth_expired
 
+        self.token_url = "https://cloud.lightspeedapp.com/auth/oauth/token"
         if "account_id" in config:
             self.api_url = "https://api.lightspeedapp.com/API/V3/Account/" + config["account_id"] + "/"
         else:
             self.api_url = ""
 
-        self.bearer_token = config.get("access_token")
+        if "access_token" in config and "access_token_expires_at" in config:
+            self.bearer_token = config["access_token"]
+            self.token_expire_time = datetime.datetime.fromtimestamp(config["access_token_expires_at"])
+        else:
+            self.token_expire_time = datetime.datetime.now() - datetime.timedelta(days=1)
+            self.bearer_token = config.get("access_token")
 
         self.rate_limit_bucket_level = None
         self.rate_limit_bucket_rate = 1
@@ -54,6 +63,43 @@ class Lightspeed(object):
         """
         self.bearer_token = access_token
         self.session.headers.update({'Authorization': 'Bearer ' + access_token})
+
+    def get_token(self):
+        """
+        Ensures the Lightspeed HQ Bearer token is current.
+        """
+        if datetime.datetime.now() <= self.token_expire_time:
+            return self.bearer_token
+
+        s = requests.Session()
+        r = None
+
+        try:
+            payload = {
+                'refresh_token': self.config["refresh_token"],
+                'client_secret': self.config["client_secret"],
+                'client_id': self.config["client_id"],
+                'grant_type': 'refresh_token',
+            }
+            r = s.post(self.token_url, data=payload)
+            json_response = r.json()
+            expires_in = int(json_response["expires_in"])
+            self.token_expire_time = datetime.datetime.now() + datetime.timedelta(seconds=expires_in)
+            self.bearer_token = json_response["access_token"]
+            self.config["access_token"] = self.bearer_token
+            self.config["access_token_expires_at"] = self.token_expire_time.timestamp()
+            if "refresh_token" in json_response:
+                self.config["refresh_token"] = json_response["refresh_token"]
+            self.session.headers.update({'Authorization': 'Bearer ' + self.bearer_token})
+            return self.bearer_token
+        except Exception as e:
+            print(f"Error getting authorization token: {type(e).__name__}: {e}, {r}", file=sys.stderr)
+            if r is not None:
+                print(f'response: {(r.status_code, r.text,)}', file=sys.stderr)
+            raise LightSpeedResponseError(
+                f"Token refresh failed ({r.status_code if r is not None else 'no response'}): "
+                f"{r.text if r is not None else str(e)}"
+            )
 
     def request_bucket(self, method, url, data=None):
         """
@@ -106,9 +152,12 @@ class Lightspeed(object):
                 elif s.status_code in RETRY_STATUS_CODES:
                     time.sleep(REQUESTS_PER_SECOND)
                 elif s.status_code == 401:
-                    raise LightSpeedAuthExpiredError(
-                        f"Authentication expired (401): {s.text}"
-                    )
+                    if self.raise_on_auth_expired:
+                        raise LightSpeedAuthExpiredError(
+                            f"Authentication expired (401): {s.text}"
+                        )
+                    else:
+                        self.get_token()
                 else:
                     last_response_text, last_status_code = s.text, s.status_code
                     print(f"Unexpected status code {s.status_code}, message: {s.text}", file=sys.stderr)
